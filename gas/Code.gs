@@ -21,7 +21,7 @@ function setup() {
       ['自分の名前', '自分'],
       ['相手の名前', 'スタッフ'],
       ['与信枠', 100000],
-      ['アプリのURL', 'https://あなたのID.github.io/リポジトリ名/'],
+      ['アプリのURL', 'https://moppoyo07.github.io/memo-app/'],
     ]);
   }
   const props = PropertiesService.getScriptProperties();

@@ -56,3 +56,5 @@ input {
 }
 .mini.danger { border-color: var(--danger); color: var(--danger); }
 .msg { min-height: 20px; font-size: 14px; color: var(--danger); margin-bottom: 8px; }
+/* iPhone で日付欄が枠からはみ出すのを防ぐ */
+input[type=date] { -webkit-appearance: none; appearance: none; display: block; min-width: 0; max-width: 100%; min-height: 50px; text-align: left; }

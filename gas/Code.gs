@@ -93,7 +93,8 @@ function view_(role) {
   const n = sh.getLastRow() - 1;
   const rows = n > 0 ? sh.getRange(2, 1, n, HEADERS.length).getValues() : [];
 
-  let balance = 0;
+  // 相手が確認した記録だけを残高に入れる。未確認分は「確認待ち」として別に数える
+  let balance = 0, pendingLend = 0, pendingRepay = 0;
   const items = rows.map((r, i) => {
     const it = {
       id: String(r[0]),
@@ -105,7 +106,12 @@ function view_(role) {
       confirmed: r[5] instanceof Date ? Utilities.formatDate(r[5], tz, 'yyyy/MM/dd HH:mm') : '',
       voided: r[6] === true || r[6] === 'TRUE',
     };
-    if (!it.voided) balance += it.type === '貸付' ? it.amount : -it.amount;
+    if (!it.voided) {
+      const sign = it.type === '貸付' ? 1 : -1;
+      if (it.confirmed) balance += sign * it.amount;
+      else if (sign > 0) pendingLend += it.amount;
+      else pendingRepay += it.amount;
+    }
     return it;
   }).sort((a, b) => b.sort - a.sort);
 
@@ -116,15 +122,19 @@ function view_(role) {
       staffName: c.staffName,
       limit: c.limit,
       balance: balance,
+      pendingLend: pendingLend,
+      pendingRepay: pendingRepay,
       items: items,
     };
   }
-  // スタッフには日付・金額・返済状況と残高だけ（メモ・与信枠・取消分は見せない）
+  // スタッフには日付・金額・確認状況と残高だけ（メモ・与信枠・取消分は見せない）
   return {
     role: role,
     ownerName: c.ownerName,
     staffName: c.staffName,
     balance: balance,
+    pendingLend: pendingLend,
+    pendingRepay: pendingRepay,
     items: items.filter(it => !it.voided).map(it => ({
       id: it.id,
       date: it.date,
@@ -154,8 +164,9 @@ function confirmTx_(id) {
   withLock_(() => {
     const sh = txSheet_();
     const row = findRow_(id);
-    if (sh.getRange(row, 3).getValue() !== '返済') throw new Error('確認できるのは返済だけです');
-    if (!sh.getRange(row, 6).getValue()) sh.getRange(row, 6).setValue(new Date());
+    const r = sh.getRange(row, 1, 1, HEADERS.length).getValues()[0];
+    if (r[6] === true || r[6] === 'TRUE') throw new Error('この記録は取り消されています');
+    if (!r[5]) sh.getRange(row, 6).setValue(new Date());
   });
 }
 

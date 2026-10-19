@@ -96,7 +96,10 @@
         h('div', { className: 'bar' }, h('div', { style: 'width:' + pct + '%' })),
         h('div', { className: 'small', textContent: '与信枠 ' + yen(d.limit) }),
       ] : null,
-      over ? h('div', { className: 'warn', textContent: '与信枠を超えています' }) : null);
+      over ? h('div', { className: 'warn', textContent: '与信枠を超えています' }) : null,
+      pendingNote(d),
+      !over && d.limit > 0 && d.balance + d.pendingLend > d.limit
+        ? h('div', { className: 'warn', textContent: '確認待ちの貸付を含めると与信枠を超えます' }) : null);
 
     let type = '貸付';
     const btnLend = h('button', { textContent: '貸した' });
@@ -126,7 +129,7 @@
     const list = d.items.map(it => {
       let status = '';
       if (it.voided) status = '取消済み';
-      else if (it.type === '返済') status = it.confirmed ? '相手確認済み ✓（' + it.confirmed + '）' : '相手未確認';
+      else status = it.confirmed ? '相手確認済み ✓（' + it.confirmed + '）' : '相手確認待ち（残高に未反映）';
       const actions = h('div');
       if (!it.voided) {
         // 誤タップ防止に2回押しで取消
@@ -152,42 +155,55 @@
     return [summary, form, historyCard(list)];
   }
 
-  // スタッフの画面：借りた日・返済状況・残高だけ
+  // スタッフの画面：借りた日・返済状況・残高だけ。記録は1件ずつ確認してもらう
   function staffView(d) {
     const out = [];
-    const pending = d.items.filter(it => it.type === '返済' && !it.confirmed);
+    const pending = d.items.filter(it => !it.confirmed);
     if (pending.length) {
-      const latest = pending[0];
       const msg = h('div', { className: 'msg' });
-      const ids = pending.map(it => it.id);
-      const btn = h('button', { className: 'primary', textContent: '確認しました' });
-      btn.onclick = async () => {
-        btn.disabled = true;
-        for (const id of ids.slice(0, -1)) await api('confirm', { id: id }).catch(() => {});
-        await run('confirm', { id: ids[ids.length - 1] }, msg);
-        btn.disabled = false;
-      };
+      const rows = pending.map(it => {
+        const btn = h('button', { className: 'mini', textContent: '確認しました' });
+        btn.onclick = async () => {
+          btn.disabled = true;
+          await run('confirm', { id: it.id }, msg);
+          btn.disabled = false;
+        };
+        return h('div', { className: 'item' },
+          h('div', { className: 'row' },
+            h('div', {},
+              h('span', { className: it.type === '貸付' ? 't-lend' : 't-repay', textContent: it.type === '貸付' ? '借りた' : '返済' }),
+              h('span', { className: 'amt', textContent: ' ' + yen(it.amount) })),
+            btn),
+          h('div', { className: 'small', textContent: it.date }));
+      });
       out.push(h('div', { className: 'card notice' },
-        h('div', { className: 'label', textContent: latest.date }),
-        h('div', { className: 'big', textContent: yen(latest.amount) + ' の返済が完了しました' }),
-        pending.length > 1 ? h('div', { className: 'small', textContent: 'ほかに未確認の返済が ' + (pending.length - 1) + ' 件あります' }) : null,
-        h('div', { className: 'big', textContent: '残高は ' + yen(d.balance) + ' です' }),
-        msg, btn));
+        h('div', { className: 'big', textContent: '確認をお願いします（' + pending.length + '件）' }),
+        h('div', { className: 'small', textContent: '内容が合っていたら「確認しました」を押してください。違うときは' + d.ownerName + 'さんに伝えてください。確認すると残高に反映されます。' }),
+        rows, msg));
     }
 
     out.push(h('div', { className: 'card' },
       h('div', { className: 'label', textContent: d.ownerName + 'さんからの借入残高' }),
       h('div', { className: 'balance', textContent: yen(d.balance) }),
-      d.balance <= 0 ? h('div', { className: 'small ok', textContent: '完済しています' }) : null));
+      pendingNote(d),
+      d.balance <= 0 && !pending.length ? h('div', { className: 'small ok', textContent: '完済しています' }) : null));
 
     const list = d.items.map(it => h('div', { className: 'item' },
       h('div', {},
         h('span', { className: it.type === '貸付' ? 't-lend' : 't-repay', textContent: it.type === '貸付' ? '借りた' : '返済' }),
         h('span', { className: 'amt', textContent: ' ' + yen(it.amount) })),
-      h('div', { className: 'small', textContent: it.date + (it.type === '返済' ? (it.confirmed ? '　確認済み ✓' : '　未確認') : '') })));
+      h('div', { className: 'small', textContent: it.date + (it.confirmed ? '　確認済み ✓' : '　未確認') })));
 
     out.push(historyCard(list));
     return out;
+  }
+
+  // 残高の下に出す「確認待ち」の合計
+  function pendingNote(d) {
+    const parts = [];
+    if (d.pendingLend) parts.push((d.role === 'owner' ? '貸付 ' : '借りた ') + yen(d.pendingLend));
+    if (d.pendingRepay) parts.push('返済 ' + yen(d.pendingRepay));
+    return parts.length ? h('div', { className: 'small', textContent: '確認待ち：' + parts.join(' ／ ') + '（残高に未反映）' }) : null;
   }
 
   function historyCard(list) {

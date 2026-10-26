@@ -1,5 +1,5 @@
 // 画面のファイルだけキャッシュする（お金のデータはキャッシュしない）
-const CACHE = 'kashikari-v5';
+const CACHE = 'kashikari-v6';
 const ASSETS = [
   './', './index.html', './style.css', './app.js', './config.js',
   './manifest.webmanifest', './icons/icon-192.png', './icons/icon-512.png',
